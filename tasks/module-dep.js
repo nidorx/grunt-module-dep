@@ -82,11 +82,7 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
 
 function moduleDepGrunt(grunt) {
     grunt.registerMultiTask('moduleDep', 'Inject modules dependencies into your source code.', function () {
-        this.requiresConfig([
-            'moduledep',
-            this.target,
-            'src'
-        ]);
+        this.requiresConfig(['moduleDep', this.target, 'src']);
 
         var options = this.options(this.data);
 
