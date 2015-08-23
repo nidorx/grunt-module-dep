@@ -65,10 +65,10 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
                     .sort(function (pathA, pathB) {
                         var pa = path.dirname(pathA);
                         var pb = path.dirname(pathB);
-                        if(pa === pb){
+                        if (pa === pb) {
                             return 0;
                         }
-                        if(pa.indexOf(pb) === 0){
+                        if (pa.indexOf(pb) === 0) {
                             return 1;
                         }
                         return pa.localeCompare(pb);
@@ -86,6 +86,19 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
         return newHtmlContent + spacing + endComment;
     });
 };
+
+
+function oderJson(obj) {
+    if (!_.isObject(obj)) {
+        return obj;
+    }
+    // organiza as dependencias em ordem alfabética
+    var objSorted = {};
+    _.each(_.keys(obj).sort(), function (k) {
+        objSorted[k] = obj[k];
+    });
+    return objSorted;
+}
 
 
 
@@ -161,21 +174,28 @@ function moduleDepGrunt(grunt) {
             var bowerJsonOrig = JSON.stringify(bowerJson, null, 4);
 
             _.each(_.uniq(MODULES_LOADED), function (modulePath) {
-                var dep = path.join(modulePath, 'bower_dependencies.json');
-                if (grunt.file.exists(dep)) {
-                    var dependencies = grunt.file.readJSON(dep);
+                var depPath = path.join(modulePath, 'bower_dependencies.json');
+                if (grunt.file.exists(depPath)) {
+                    var dependencies = grunt.file.readJSON(depPath);
                     if (_.isObject(dependencies)) {
+
+                        // ordena o arquivo de dependencias
+                        var depJsonOrig = JSON.stringify(dependencies, null, 4);
+                        dependencies = oderJson(dependencies);
+                        var depJsonDest = JSON.stringify(dependencies, null, 4);
+                        if (depJsonOrig !== depJsonDest) {
+                            grunt.file.write(depPath, depJsonDest);
+                            grunt.log.writeln('File ' + chalk.cyan(depPath) + ' modified.');
+                            countModified++;
+                        }
+
                         bowerJson.dependencies = _.merge(dependencies, bowerJson.dependencies);
                     }
                 }
             });
 
             // organiza as dependencias em ordem alfabética
-            var dependenciesSorted = {};
-            _.each(_.keys(bowerJson.dependencies).sort(), function (k) {
-                dependenciesSorted[k] = bowerJson.dependencies[k];
-            });
-            bowerJson.dependencies = dependenciesSorted;
+            bowerJson.dependencies = oderJson(bowerJson.dependencies);
 
             var bowerJsonDest = JSON.stringify(bowerJson, null, 4);
             if (bowerJsonOrig !== bowerJsonDest) {
