@@ -121,9 +121,9 @@ function moduleDepGrunt(grunt) {
                     var newHtmlContent = replaceHtmlContent(htmlContent, filepath);
 
                     if (htmlContent !== newHtmlContent) {
-                        countModified++;
                         grunt.file.write(filepath, newHtmlContent);
                         grunt.log.writeln('File ' + chalk.cyan(filepath) + ' modified.');
+                        countModified++;
                     }
                 } catch (e) {
                     grunt.log.error(e);
@@ -155,10 +155,18 @@ function moduleDepGrunt(grunt) {
                 }
             });
 
+            // organiza as dependencias em ordem alfabética
+            var dependenciesSorted = {};
+            _.each(_.keys(bowerJson.dependencies).sort(), function (k) {
+                dependenciesSorted[k] = bowerJson.dependencies[k];
+            });
+            bowerJson.dependencies = dependenciesSorted;
+
             var bowerJsonDest = JSON.stringify(bowerJson, null, 4);
             if (bowerJsonOrig !== bowerJsonDest) {
                 grunt.file.write('bower.json', bowerJsonDest);
                 grunt.log.writeln('bower.json dependencies updated');
+                countModified++;
             }
         }
 
