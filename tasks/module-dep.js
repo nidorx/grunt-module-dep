@@ -25,11 +25,11 @@ var REPLACE = {
 var replaceHtmlContent = function (htmlContent, htmlFilePath) {
 
     var returnType = /\r\n/.test(htmlContent) ? '\r\n' : '\n';
-    var filesCaught = [];
 
     return htmlContent.replace(PATTERN, function (
             match, startComment, spacing, type, module, oldScripts, endComment,
             offset, string) {
+        var filesCaught = [];
         type = type || 'js';
 
 
