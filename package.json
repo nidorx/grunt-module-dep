@@ -1,6 +1,6 @@
 {
   "name": "grunt-module-dep",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "description": "Inject module dependencies to your source code.",
   "repository": {
     "type": "git",
