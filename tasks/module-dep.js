@@ -57,7 +57,11 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
         spacing = returnType + spacing.replace(/\r|\n/g, '');
 
         // Obtém os arquivos a serem inseridos
-        var dependencies = glob.sync(path.join(htmlFilePath, module, '/**/*.' + injectType));
+        var dependencies = glob.sync(path.join(
+                path.dirname(htmlFilePath),
+                module,
+                '/**/*.' + injectType
+                ));
         dependencies.map(function (depPath) {
             return path.join(
                     path.relative(path.dirname(htmlFilePath), path.dirname(depPath)),
@@ -66,19 +70,16 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
         }).filter(function (relativeDepPath) {
             return filesCaught.indexOf(relativeDepPath) === -1;
         }).forEach(function (filePath) {
-            if (typeof HTML_PARSER.replace[injectType] === 'function') {
-                newFileContents += spacing + HTML_PARSER.replace[injectType](filePath);
-            } else if (typeof HTML_PARSER.replace[injectType] === 'string') {
-                newFileContents += spacing + HTML_PARSER.replace[injectType].replace('{{filePath}}', filePath);
-            }
+            newFileContents += spacing + HTML_PARSER.replace[injectType].replace('{{filePath}}', filePath);
         });
 
         return newFileContents + spacing + endBlock;
     }
 
-
     return htmlContent.replace(HTML_PARSER.block, replaceFn);
 };
+
+
 
 function moduleDepGrunt(grunt) {
     grunt.registerMultiTask('moduleDep', 'Inject modules dependencies into your source code.', function () {
@@ -89,6 +90,8 @@ function moduleDepGrunt(grunt) {
         if (this.files.length < 1) {
             grunt.verbose.warn('Destination not written because no source files were provided.');
         }
+
+        var countModified = 0;
 
         this.files.forEach(function (f) {
             var files = f.src.filter(function (filepath) {
@@ -120,8 +123,9 @@ function moduleDepGrunt(grunt) {
                     var newHtmlContent = replaceHtmlContent(htmlContent, filepath);
 
                     if (htmlContent !== newHtmlContent) {
-                        grunt.file.write(f.dest, newHtmlContent);
-                        grunt.verbose.writeln('File ' + chalk.cyan(f.dest) + ' modified.');
+                        countModified++;
+                        grunt.file.write(filepath, newHtmlContent);
+                        grunt.verbose.writeln('File ' + chalk.cyan(filepath) + ' modified.');
                     }
                 } catch (e) {
                     grunt.log.error(e);
@@ -131,7 +135,7 @@ function moduleDepGrunt(grunt) {
             });
         });
 
-        grunt.log.ok(this.files.length + ' ' + grunt.util.pluralize(this.files.length, 'file/files') + ' modified.');
+        grunt.log.ok(countModified + ' ' + grunt.util.pluralize(countModified, 'file/files') + ' modified.');
     });
 }
 
