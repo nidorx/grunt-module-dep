@@ -76,12 +76,12 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
         return newFileContents + spacing + endBlock;
     }
 
-    
+
     return htmlContent.replace(HTML_PARSER.block, replaceFn);
 };
 
 function moduleDepGrunt(grunt) {
-    grunt.registerMultiTask('moduledep', 'Inject Bower packages into your source code.', function () {
+    grunt.registerMultiTask('moduleDep', 'Inject modules dependencies into your source code.', function () {
         this.requiresConfig([
             'moduledep',
             this.target,
@@ -129,7 +129,7 @@ function moduleDepGrunt(grunt) {
                     }
                 } catch (e) {
                     grunt.log.error(e);
-                    grunt.fail.warn('moduledep failed to parse "' + filepath + '".');
+                    grunt.fail.warn('moduleDep failed to parse "' + filepath + '".');
                     return false;
                 }
             });
