@@ -1,88 +1,83 @@
 'use strict';
 
+var _ = require('lodash');
 var path = require('path');
 var glob = require('glob');
 var chalk = require('chalk');
 
 
+// registra os módulos carregados
+// usado para permitir atualizar o bower.json
+var MODULES_LOADED = [];
 
-var HTML_PARSER = {
-    block: /(([ \t]*)<!--\s*module:*(\S*)\((\S*)\)\s*-->)(\n|\r|.)*?(<!--\s*endModule\s*-->)/gi,
-    detect: {
-        js: /<script.*src=['"](.+)['"]>/gi,
-        css: /<link.*href=['"](.+)['"]/gi
-    },
-    replace: {
-        js: '<script src="{{filePath}}"></script>',
-        css: '<link rel="stylesheet" href="{{filePath}}" />'
-    }
+var PATTERN = /(([ \t]*)<!--\s*module:*(\S*)\((\S*)\)\s*-->)(\n|\r|.)*?(<!--\s*endModule\s*-->)/gi;
+
+var DETECT = {
+    js: /<script.*src=['"](.+)['"]>/gi,
+    css: /<link.*href=['"](.+)['"]/gi
+};
+
+var REPLACE = {
+    js: '<script src="{{filePath}}"></script>',
+    css: '<link rel="stylesheet" href="{{filePath}}" />'
 };
 
 var replaceHtmlContent = function (htmlContent, htmlFilePath) {
 
     var returnType = /\r\n/.test(htmlContent) ? '\r\n' : '\n';
     var filesCaught = [];
-    var findReferences = function (match, reference) {
-        filesCaught.push(reference);
-        return match;
-    };
 
-    /**
-     * Callback function after matching our regex from the source file.
-     *
-     * @param  {array}  match       strings that were matched
-     * @param  {string} startBlock  the opening <!-- module:xxx(modToInject) --> comment
-     * @param  {string} spacing     the type and size of indentation
-     * @param  {string} injectType  the type of block (js/css)
-     * @param  {string} module      O módulo a ser injetado
-     * @param  {string} oldScripts  the old block of scripts we'll remove
-     * @param  {string} endBlock    the closing <!-- endModule --> comment
-     * @return {string} the new file contents
-     */
-    function replaceFn(
-            match, startBlock, spacing, injectType, module, oldScripts, endBlock,
-            offset, string
-            ) {
-        injectType = injectType || 'js';
+    return htmlContent.replace(PATTERN, function (
+            match, startComment, spacing, type, module, oldScripts, endComment,
+            offset, string) {
+        type = type || 'js';
 
-        var newFileContents = startBlock;
-        var dependencies = [];
 
-        // verifica as referencias, para evitar duplicidade
-        string = string.substr(0, offset) + string.substr(offset + match.length);
-        string
-                .replace(oldScripts, '')
-                .replace(HTML_PARSER.detect[injectType], findReferences);
+        var newHtmlContent = startComment;
+
+        // verifica as referencias fora do bloco, para evitar duplicidade
+        if (DETECT[type]) {
+            string = string.substr(0, offset) + string.substr(offset + match.length);
+            string.replace(oldScripts, '').replace(DETECT[type], function (match, reference) {
+                filesCaught.push(reference);
+                return match;
+            });
+        }
 
         spacing = returnType + spacing.replace(/\r|\n/g, '');
 
         // Obtém os arquivos a serem inseridos
-        var dependencies = glob.sync(path.join(
-                path.dirname(htmlFilePath),
-                module,
-                '/**/*.' + injectType
-                ));
-        dependencies.map(function (depPath) {
-            return path.join(
-                    path.relative(path.dirname(htmlFilePath), path.dirname(depPath)),
-                    path.basename(depPath)
-                    ).replace(/\\/g, '/');
-        }).filter(function (relativeDepPath) {
-            return filesCaught.indexOf(relativeDepPath) === -1;
-        }).forEach(function (filePath) {
-            newFileContents += spacing + HTML_PARSER.replace[injectType].replace('{{filePath}}', filePath);
-        });
+        var modulePath = path.join(path.dirname(htmlFilePath), module);
 
-        return newFileContents + spacing + endBlock;
-    }
+        // registra o módulo sendo carregado
+        MODULES_LOADED.push(modulePath);
 
-    return htmlContent.replace(HTML_PARSER.block, replaceFn);
+        if (REPLACE[type]) {
+            var deps = glob.sync(path.join(modulePath, '/**/*.' + type));
+            deps.map(function (depPath) {
+                return path.join(
+                        path.relative(path.dirname(htmlFilePath), path.dirname(depPath)),
+                        path.basename(depPath)
+                        ).replace(/\\/g, '/');
+            }).filter(function (relativeDepPath) {
+                return filesCaught.indexOf(relativeDepPath) === -1;
+            }).forEach(function (filePath) {
+                newHtmlContent += spacing + REPLACE[type].replace('{{filePath}}', filePath);
+            });
+        }
+
+        return newHtmlContent + spacing + endComment;
+    });
 };
 
 
 
 function moduleDepGrunt(grunt) {
     grunt.registerMultiTask('moduleDep', 'Inject modules dependencies into your source code.', function () {
+
+        // limpa a lista de módulos carregados
+        MODULES_LOADED = [];
+
         this.requiresConfig(['moduleDep', this.target, 'src']);
 
         var options = this.options(this.data);
@@ -93,6 +88,9 @@ function moduleDepGrunt(grunt) {
 
         var countModified = 0;
 
+        /**
+         * Faz o parsing de todos os arquivos
+         */
         this.files.forEach(function (f) {
             var files = f.src.filter(function (filepath) {
                 // Warn on and remove invalid source files (if nonull was set).
@@ -125,7 +123,7 @@ function moduleDepGrunt(grunt) {
                     if (htmlContent !== newHtmlContent) {
                         countModified++;
                         grunt.file.write(filepath, newHtmlContent);
-                        grunt.verbose.writeln('File ' + chalk.cyan(filepath) + ' modified.');
+                        grunt.log.writeln('File ' + chalk.cyan(filepath) + ' modified.');
                     }
                 } catch (e) {
                     grunt.log.error(e);
@@ -134,6 +132,35 @@ function moduleDepGrunt(grunt) {
                 }
             });
         });
+
+
+        // após tratar os arquivos atualiza as dependencias do bower
+        if (grunt.file.exists('bower.json')) {
+            grunt.log.writeln('Check bower.json dependencies');
+
+            var bowerJson = grunt.file.readJSON('bower.json');
+            if (!bowerJson.dependencies) {
+                bowerJson.dependencies = {};
+            }
+
+            var bowerJsonOrig = JSON.stringify(bowerJson, null, 4);
+
+            _.each(_.uniq(MODULES_LOADED), function (modulePath) {
+                var dep = path.join(modulePath, 'bower_dependencies.json');
+                if (grunt.file.exists(dep)) {
+                    var dependencies = grunt.file.readJSON(dep);
+                    if (_.isObject(dependencies)) {
+                        bowerJson.dependencies = _.merge(dependencies, bowerJson.dependencies);
+                    }
+                }
+            });
+
+            var bowerJsonDest = JSON.stringify(bowerJson, null, 4);
+            if (bowerJsonOrig !== bowerJsonDest) {
+                grunt.file.write('bower.json', bowerJsonDest);
+                grunt.log.writeln('bower.json dependencies updated');
+            }
+        }
 
         grunt.log.ok(countModified + ' ' + grunt.util.pluralize(countModified, 'file/files') + ' modified.');
     });
