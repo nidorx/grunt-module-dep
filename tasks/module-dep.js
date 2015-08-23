@@ -53,17 +53,34 @@ var replaceHtmlContent = function (htmlContent, htmlFilePath) {
         MODULES_LOADED.push(modulePath);
 
         if (REPLACE[type]) {
-            var deps = glob.sync(path.join(modulePath, '/**/*.' + type));
-            deps.map(function (depPath) {
-                return path.join(
-                        path.relative(path.dirname(htmlFilePath), path.dirname(depPath)),
-                        path.basename(depPath)
-                        ).replace(/\\/g, '/');
-            }).filter(function (relativeDepPath) {
-                return filesCaught.indexOf(relativeDepPath) === -1;
-            }).forEach(function (filePath) {
-                newHtmlContent += spacing + REPLACE[type].replace('{{filePath}}', filePath);
-            });
+            glob.sync(path.join(modulePath, '/**/*.' + type))
+                    // gera o caminho relativo dos arquivos
+                    .map(function (depPath) {
+                        return path.join(
+                                path.relative(path.dirname(htmlFilePath), path.dirname(depPath)),
+                                path.basename(depPath)
+                                ).replace(/\\/g, '/');
+                    })
+                    // ordena os arquivos alfabeticamente
+                    .sort(function (pathA, pathB) {
+                        var pa = path.dirname(pathA);
+                        var pb = path.dirname(pathB);
+                        if(pa === pb){
+                            return 0;
+                        }
+                        if(pa.indexOf(pb) === 0){
+                            return 1;
+                        }
+                        return pa.localeCompare(pb);
+                    })
+                    // remove os arquivos já carregados em outro ponto
+                    .filter(function (relativeDepPath) {
+                        return filesCaught.indexOf(relativeDepPath) === -1;
+                    })
+                    // finalmente modifica o html
+                    .forEach(function (filePath) {
+                        newHtmlContent += spacing + REPLACE[type].replace('{{filePath}}', filePath);
+                    });
         }
 
         return newHtmlContent + spacing + endComment;
@@ -88,9 +105,7 @@ function moduleDepGrunt(grunt) {
 
         var countModified = 0;
 
-        /**
-         * Faz o parsing de todos os arquivos
-         */
+        // Faz o parsing de todos os arquivos
         this.files.forEach(function (f) {
             var files = f.src.filter(function (filepath) {
                 // Warn on and remove invalid source files (if nonull was set).
